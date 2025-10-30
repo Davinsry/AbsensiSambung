@@ -51,10 +51,19 @@
       font-weight: 600;
       cursor: pointer;
       transition: 0.3s;
+      margin-top: 10px;
     }
 
     button:hover {
       background: #dbe4ff;
+    }
+
+    .error {
+      color: #ff8080;
+    }
+
+    .success {
+      color: #00ff99;
     }
   </style>
 </head>
@@ -70,13 +79,14 @@
     const resultDiv = document.getElementById("result");
 
     let html5QrCode;
+    let lastData = null; // simpan data terakhir untuk retry
 
     startBtn.addEventListener("click", async () => {
       startBtn.style.display = "none";
       reader.style.display = "block";
+      resultDiv.style.display = "none";
 
       html5QrCode = new Html5Qrcode("reader");
-
       const config = { fps: 10, qrbox: { width: 250, height: 250 } };
 
       try {
@@ -93,15 +103,12 @@
 
     async function onScanSuccess(decodedText) {
       try {
-        // Hentikan kamera setelah berhasil scan
         await html5QrCode.stop();
         reader.style.display = "none";
 
-        // Parsing data QR Code
         const params = new URLSearchParams(decodedText);
         const data = Object.fromEntries(params.entries());
 
-        // Tambahkan waktu kedatangan (format lokal)
         const now = new Date();
         const waktuKedatangan = now.toLocaleString("id-ID", {
           timeZone: "Asia/Jakarta",
@@ -109,8 +116,8 @@
         });
 
         data["WaktuKedatangan"] = waktuKedatangan;
+        lastData = data; // simpan data untuk retry
 
-        // Tampilkan hasil di layar
         resultDiv.style.display = "block";
         resultDiv.innerHTML = `
           <h3>Data Terdeteksi:</h3>
@@ -119,10 +126,18 @@
           <p><b>Tanggal Lahir:</b> ${data.TanggalLahir}</p>
           <p><b>Kelompok:</b> ${data.Kelompok}</p>
           <p><b>Waktu Kedatangan:</b> ${data.WaktuKedatangan}</p>
-          <p style="margin-top:10px;">⏳ Mengirim data ke server...</p>
+          <p id="status">⏳ Mengirim data ke server...</p>
         `;
 
-        // Kirim ke webhook n8n
+        kirimKeWebhook(data);
+      } catch (err) {
+        alert("Terjadi kesalahan: " + err);
+      }
+    }
+
+    async function kirimKeWebhook(data) {
+      const statusEl = document.getElementById("status");
+      try {
         const response = await fetch("https://n8n-x5ircifhjkj5.n8x.biz.id/webhook/Absensi_Desa", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -130,13 +145,30 @@
         });
 
         if (response.ok) {
-          resultDiv.innerHTML += `<p style="color:#00ff99;">✅ Data berhasil dikirim!</p>`;
+          statusEl.innerHTML = "✅ Data berhasil dikirim!";
+          statusEl.classList.add("success");
         } else {
-          resultDiv.innerHTML += `<p style="color:#ff8080;">❌ Gagal mengirim data ke server.</p>`;
+          const text = await response.text();
+          statusEl.innerHTML = `❌ Gagal mengirim data ke server.<br><small>${text}</small>`;
+          statusEl.classList.add("error");
+          tampilkanTombolUlangi();
         }
       } catch (err) {
-        alert("Terjadi kesalahan: " + err);
+        statusEl.innerHTML = `❌ Gagal mengirim data: ${err.message}`;
+        statusEl.classList.add("error");
+        tampilkanTombolUlangi();
       }
+    }
+
+    function tampilkanTombolUlangi() {
+      const ulangiBtn = document.createElement("button");
+      ulangiBtn.textContent = "Ulangi Kirim";
+      ulangiBtn.onclick = () => {
+        ulangiBtn.remove();
+        document.getElementById("status").innerHTML = "⏳ Mengirim ulang data...";
+        kirimKeWebhook(lastData);
+      };
+      resultDiv.appendChild(ulangiBtn);
     }
   </script>
 </body>
