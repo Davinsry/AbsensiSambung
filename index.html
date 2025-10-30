@@ -3,174 +3,161 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Absensi QR Code</title>
-  <script src="https://unpkg.com/html5-qrcode"></script>
+  <title>Absensi Desa LDII</title>
   <style>
-    body {
+    * {
       font-family: 'Poppins', sans-serif;
-      background: linear-gradient(135deg, #4c6ef5, #7950f2);
-      color: #fff;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      height: 100vh;
-      margin: 0;
+      box-sizing: border-box;
     }
-
+    body {
+      background: linear-gradient(135deg, #4f46e5, #06b6d4);
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 20px;
+      color: #fff;
+    }
+    .container {
+      background: rgba(255, 255, 255, 0.15);
+      border-radius: 16px;
+      backdrop-filter: blur(10px);
+      padding: 30px 25px;
+      width: 100%;
+      max-width: 420px;
+      text-align: center;
+      box-shadow: 0 8px 25px rgba(0,0,0,0.2);
+    }
     h1 {
-      font-size: 2rem;
+      font-size: 1.6rem;
       margin-bottom: 20px;
     }
-
-    #reader {
-      width: 300px;
-      border-radius: 15px;
-      overflow: hidden;
-      box-shadow: 0 4px 20px rgba(0,0,0,0.3);
-      display: none;
-    }
-
-    #result {
-      margin-top: 20px;
-      background: rgba(255, 255, 255, 0.15);
-      padding: 15px;
-      border-radius: 10px;
-      display: none;
-      width: 300px;
-      text-align: left;
-    }
-
-    button {
-      background: #fff;
-      color: #4c6ef5;
+    input, button {
+      width: 100%;
+      padding: 12px;
       border: none;
-      padding: 12px 20px;
-      border-radius: 8px;
+      border-radius: 10px;
       font-size: 1rem;
+      margin: 8px 0;
+    }
+    input {
+      background: rgba(255,255,255,0.8);
+      color: #333;
+    }
+    button {
+      background: #10b981;
+      color: white;
       font-weight: 600;
       cursor: pointer;
-      transition: 0.3s;
-      margin-top: 10px;
+      transition: 0.2s;
     }
-
     button:hover {
-      background: #dbe4ff;
+      background: #059669;
     }
-
     .error {
-      color: #ff8080;
+      background: #ef4444 !important;
     }
-
-    .success {
-      color: #00ff99;
+    .secondary {
+      background: #3b82f6;
+    }
+    .result {
+      margin-top: 15px;
+      font-size: 0.9rem;
+      padding: 10px;
+      background: rgba(0,0,0,0.25);
+      border-radius: 8px;
     }
   </style>
 </head>
 <body>
-  <h1>Absensi QR Code</h1>
-  <button id="startBtn">Mulai Scan</button>
-  <div id="reader"></div>
-  <div id="result"></div>
+  <div class="container">
+    <h1>📋 Absensi Desa LDII</h1>
+    <input type="text" id="barcodeInput" placeholder="Scan barcode di sini..." autofocus />
+    <button id="sendBtn">Kirim Data</button>
+    <button id="retryBtn" class="error" style="display:none;">Ulangi Kirim</button>
+    <button id="nextBtn" class="secondary" style="display:none;">Kembali / Scan Peserta Baru</button>
+    <div id="result" class="result"></div>
+  </div>
 
   <script>
-    const startBtn = document.getElementById("startBtn");
-    const reader = document.getElementById("reader");
-    const resultDiv = document.getElementById("result");
+    const input = document.getElementById('barcodeInput');
+    const sendBtn = document.getElementById('sendBtn');
+    const retryBtn = document.getElementById('retryBtn');
+    const nextBtn = document.getElementById('nextBtn');
+    const result = document.getElementById('result');
 
-    let html5QrCode;
-    let lastUrl = "";
+    // Hitung umur berdasarkan tanggal lahir
+    function hitungUmur(tanggalLahir) {
+      const lahir = new Date(tanggalLahir);
+      const sekarang = new Date();
+      let umur = sekarang.getFullYear() - lahir.getFullYear();
+      const bulan = sekarang.getMonth() - lahir.getMonth();
+      if (bulan < 0 || (bulan === 0 && sekarang.getDate() < lahir.getDate())) {
+        umur--;
+      }
+      return umur;
+    }
 
-    startBtn.addEventListener("click", async () => {
-      startBtn.style.display = "none";
-      reader.style.display = "block";
-      resultDiv.style.display = "none";
+    // Tentukan kelas berdasarkan umur
+    function tentukanKelas(umur) {
+      if (umur >= 13 && umur <= 15) return "Pra Remaja 13-15 th";
+      if (umur >= 16 && umur <= 18) return "Remaja 16-18 th";
+      if (umur >= 19 && umur <= 22) return "Pra Nikah 19-22 th";
+      if (umur >= 23) return "Usia Mandiri 23+ th";
+      return "Tidak terdefinisi";
+    }
 
-      html5QrCode = new Html5Qrcode("reader");
-      const config = { fps: 10, qrbox: { width: 250, height: 250 } };
+    async function kirimData() {
+      const dataString = input.value.trim();
+      if (!dataString) {
+        result.textContent = "⚠️ Silakan scan barcode dulu.";
+        return;
+      }
+
+      // Misal format barcode seperti: "Nama=Muhammad Davin Surya&JenisKelamin=Pria&TanggalLahir=2005-04-12&Kelompok=Almahdiyyin"
+      const params = new URLSearchParams(dataString);
+      const nama = params.get("Nama") || "";
+      const jk = params.get("JenisKelamin") || "";
+      const tglLahir = params.get("TanggalLahir") || "";
+      const kelompok = params.get("Kelompok") || "";
+      const waktu = new Date().toISOString().slice(0, 19).replace("T", " ");
+      const umur = hitungUmur(tglLahir);
+      const kelas = tentukanKelas(umur);
+
+      const url = `https://n8n-x5ircifhjkj5.n8x.biz.id/webhook/Absensi_Desa?Nama=${encodeURIComponent(nama)}&JenisKelamin=${encodeURIComponent(jk)}&TanggalLahir=${encodeURIComponent(tglLahir)}&Kelompok=${encodeURIComponent(kelompok)}&Kelas=${encodeURIComponent(kelas)}&WaktuKedatangan=${encodeURIComponent(waktu)}`;
+
+      result.textContent = "⏳ Mengirim data...";
+      retryBtn.style.display = "none";
+      nextBtn.style.display = "none";
 
       try {
-        await html5QrCode.start(
-          { facingMode: "environment" },
-          config,
-          onScanSuccess
-        );
-      } catch (err) {
-        alert("Gagal mengakses kamera: " + err);
-        startBtn.style.display = "block";
+        const res = await fetch(url);
+        if (res.ok) {
+          result.textContent = `✅ Data berhasil dikirim!\nNama: ${nama}\nKelas: ${kelas}\nUmur: ${umur} tahun`;
+          nextBtn.style.display = "block";
+        } else {
+          throw new Error("Server error");
+        }
+      } catch (e) {
+        result.textContent = "❌ Gagal mengirim data. Silakan coba lagi.";
+        retryBtn.style.display = "block";
       }
+    }
+
+    sendBtn.addEventListener('click', kirimData);
+    retryBtn.addEventListener('click', kirimData);
+    nextBtn.addEventListener('click', () => {
+      input.value = "";
+      result.textContent = "";
+      retryBtn.style.display = "none";
+      nextBtn.style.display = "none";
+      input.focus();
     });
 
-    async function onScanSuccess(decodedText) {
-      try {
-        await html5QrCode.stop();
-        reader.style.display = "none";
-
-        const params = new URLSearchParams(decodedText);
-        const data = Object.fromEntries(params.entries());
-
-        const now = new Date();
-        const waktuKedatangan = now.toLocaleString("id-ID", {
-          timeZone: "Asia/Jakarta",
-          hour12: false,
-        });
-
-        data["WaktuKedatangan"] = waktuKedatangan;
-
-        // Buat URL dengan parameter GET
-        const baseUrl = "https://n8n-x5ircifhjkj5.n8x.biz.id/webhook/Absensi_Desa";
-        const urlParams = new URLSearchParams(data).toString();
-        const fullUrl = `${baseUrl}?${urlParams}`;
-        lastUrl = fullUrl;
-
-        resultDiv.style.display = "block";
-        resultDiv.innerHTML = `
-          <h3>Data Terdeteksi:</h3>
-          <p><b>Nama:</b> ${data.Nama}</p>
-          <p><b>Jenis Kelamin:</b> ${data.JenisKelamin}</p>
-          <p><b>Tanggal Lahir:</b> ${data.TanggalLahir}</p>
-          <p><b>Kelompok:</b> ${data.Kelompok}</p>
-          <p><b>Waktu Kedatangan:</b> ${data.WaktuKedatangan}</p>
-          <p id="status">⏳ Mengirim data ke server...</p>
-        `;
-
-        kirimKeWebhook(fullUrl);
-      } catch (err) {
-        alert("Terjadi kesalahan: " + err);
-      }
-    }
-
-    async function kirimKeWebhook(fullUrl) {
-      const statusEl = document.getElementById("status");
-      try {
-        const response = await fetch(fullUrl, { method: "GET" });
-
-        if (response.ok) {
-          statusEl.innerHTML = "✅ Data berhasil dikirim!";
-          statusEl.classList.add("success");
-        } else {
-          const text = await response.text();
-          statusEl.innerHTML = `❌ Gagal mengirim data ke server.<br><small>${text}</small>`;
-          statusEl.classList.add("error");
-          tampilkanTombolUlangi();
-        }
-      } catch (err) {
-        statusEl.innerHTML = `❌ Gagal mengirim data: ${err.message}`;
-        statusEl.classList.add("error");
-        tampilkanTombolUlangi();
-      }
-    }
-
-    function tampilkanTombolUlangi() {
-      const ulangiBtn = document.createElement("button");
-      ulangiBtn.textContent = "Ulangi Kirim";
-      ulangiBtn.onclick = () => {
-        ulangiBtn.remove();
-        document.getElementById("status").innerHTML = "⏳ Mengirim ulang data...";
-        kirimKeWebhook(lastUrl);
-      };
-      resultDiv.appendChild(ulangiBtn);
-    }
+    // Enter = kirim
+    input.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') kirimData();
+    });
   </script>
 </body>
 </html>
