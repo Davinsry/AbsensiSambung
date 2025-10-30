@@ -57,11 +57,6 @@
     button:hover {
       background: #dbe4ff;
     }
-    
-    /* Tombol bisa bersebelahan */
-    #result button {
-        margin-right: 5px; 
-    }
 
     .error {
       color: #ff8080;
@@ -84,14 +79,12 @@
     const resultDiv = document.getElementById("result");
 
     let html5QrCode;
-    let lastData = null; // simpan data terakhir untuk retry
+    let lastUrl = "";
 
     startBtn.addEventListener("click", async () => {
       startBtn.style.display = "none";
       reader.style.display = "block";
       resultDiv.style.display = "none";
-      resultDiv.innerHTML = ""; // Bersihkan hasil sebelumnya
-      resultDiv.classList.remove("success", "error");
 
       html5QrCode = new Html5Qrcode("reader");
       const config = { fps: 10, qrbox: { width: 250, height: 250 } };
@@ -116,13 +109,6 @@
         const params = new URLSearchParams(decodedText);
         const data = Object.fromEntries(params.entries());
 
-        // Cek jika data kosong setelah parsing
-        if (Object.keys(data).length === 0) {
-            alert("Gagal membaca data QR Code. Pastikan format QR Code benar (contoh: Nama=Budi&Kelompok=A). QR Code terdeteksi: " + decodedText);
-            startBtn.style.display = "block"; // Tampilkan tombol scan lagi
-            return; // Hentikan fungsi
-        }
-
         const now = new Date();
         const waktuKedatangan = now.toLocaleString("id-ID", {
           timeZone: "Asia/Jakarta",
@@ -130,92 +116,60 @@
         });
 
         data["WaktuKedatangan"] = waktuKedatangan;
-        lastData = data; // simpan data untuk retry
+
+        // Buat URL dengan parameter GET
+        const baseUrl = "https://n8n-x5ircifhjkj5.n8x.biz.id/webhook/Absensi_Desa";
+        const urlParams = new URLSearchParams(data).toString();
+        const fullUrl = `${baseUrl}?${urlParams}`;
+        lastUrl = fullUrl;
 
         resultDiv.style.display = "block";
         resultDiv.innerHTML = `
           <h3>Data Terdeteksi:</h3>
-          <p><b>Nama:</b> ${data.Nama || 'Tidak ada'}</p>
-          <p><b>Jenis Kelamin:</b> ${data.JenisKelamin || 'Tidak ada'}</p>
-          <p><b>Tanggal Lahir:</b> ${data.TanggalLahir || 'Tidak ada'}</p>
-          <p><b>Kelompok:</b> ${data.Kelompok || 'Tidak ada'}</p>
+          <p><b>Nama:</b> ${data.Nama}</p>
+          <p><b>Jenis Kelamin:</b> ${data.JenisKelamin}</p>
+          <p><b>Tanggal Lahir:</b> ${data.TanggalLahir}</p>
+          <p><b>Kelompok:</b> ${data.Kelompok}</p>
           <p><b>Waktu Kedatangan:</b> ${data.WaktuKedatangan}</p>
           <p id="status">⏳ Mengirim data ke server...</p>
         `;
 
-        kirimKeWebhook(data);
+        kirimKeWebhook(fullUrl);
       } catch (err) {
         alert("Terjadi kesalahan: " + err);
-        startBtn.style.display = "block";
       }
     }
 
-    async function kirimKeWebhook(data) {
+    async function kirimKeWebhook(fullUrl) {
       const statusEl = document.getElementById("status");
-      
-      // Mengubah objek data {Nama: "Budi",...} menjadi string "Nama=Budi&..."
-      const queryString = new URLSearchParams(data).toString();
-      const webhookUrl = "https.n8n-x5ircifhjkj5.n8x.biz.id/webhook/Absensi_Desa";
-
       try {
-          // Mengirim data sebagai GET. 'fetch' secara default menggunakan GET.
-          // Datanya kita tempel di URL menggunakan tanda '?'
-          const response = await fetch(`${webhookUrl}?${queryString}`);
+        const response = await fetch(fullUrl, { method: "GET" });
 
-          if (response.ok) {
-              statusEl.innerHTML = "✅ Data berhasil dikirim!";
-              statusEl.classList.add("success");
-              tampilkanTombolScanLagi();
-          } else {
-              const text = await response.text();
-              statusEl.innerHTML = `❌ Gagal mengirim data ke server.<br><small>${text}</small>`;
-              statusEl.classList.add("error");
-              tampilkanTombolUlangi();
-              tampilkanTombolScanLagi();
-          }
-      } catch (err) {
-          statusEl.innerHTML = `❌ Gagal mengirim data: ${err.message}`;
+        if (response.ok) {
+          statusEl.innerHTML = "✅ Data berhasil dikirim!";
+          statusEl.classList.add("success");
+        } else {
+          const text = await response.text();
+          statusEl.innerHTML = `❌ Gagal mengirim data ke server.<br><small>${text}</small>`;
           statusEl.classList.add("error");
           tampilkanTombolUlangi();
-          tampilkanTombolScanLagi();
+        }
+      } catch (err) {
+        statusEl.innerHTML = `❌ Gagal mengirim data: ${err.message}`;
+        statusEl.classList.add("error");
+        tampilkanTombolUlangi();
       }
-  }
-
-    function tampilkanTombolUlangi() {
-      // Cek agar tidak duplikat
-      if (document.getElementById("ulangiBtn")) return;
-
-      const ulangiBtn = document.createElement("button");
-      ulangiBtn.id = "ulangiBtn";
-      ulangiBtn.textContent = "Ulangi Kirim";
-      ulangiBtn.onclick = () => {
-        // Hapus kedua tombol saat retry
-        ulangiBtn.remove();
-        document.getElementById("scanLagiBtn")?.remove();
-        
-        document.getElementById("status").innerHTML = "⏳ Mengirim ulang data...";
-        kirimKeWebhook(lastData);
-      };
-      resultDiv.appendChild(ulangiBtn);
     }
 
-    // <-- FUNGSI BARU UNTUK TOMBOL SCAN LAGI -->
-    function tampilkanTombolScanLagi() {
-      // Cek agar tidak duplikat
-      if (document.getElementById("scanLagiBtn")) return;
-
-      const scanLagiBtn = document.createElement("button");
-      scanLagiBtn.id = "scanLagiBtn";
-      scanLagiBtn.textContent = "Scan Lagi";
-      scanLagiBtn.style.marginLeft = "5px"; // Beri jarak
-      scanLagiBtn.onclick = () => {
-        resultDiv.style.display = "none";
-        resultDiv.innerHTML = ""; // Hapus semua isi (termasuk tombol)
-        startBtn.style.display = "block";
-        reader.style.display = "none";
-        resultDiv.classList.remove("success", "error");
+    function tampilkanTombolUlangi() {
+      const ulangiBtn = document.createElement("button");
+      ulangiBtn.textContent = "Ulangi Kirim";
+      ulangiBtn.onclick = () => {
+        ulangiBtn.remove();
+        document.getElementById("status").innerHTML = "⏳ Mengirim ulang data...";
+        kirimKeWebhook(lastUrl);
       };
-      resultDiv.appendChild(scanLagiBtn);
+      resultDiv.appendChild(ulangiBtn);
     }
   </script>
 </body>
