@@ -152,31 +152,34 @@
 
     async function kirimKeWebhook(data) {
       const statusEl = document.getElementById("status");
-      try {
-        const response = await fetch("https.n8n-x5ircifhjkj5.n8x.biz.id/webhook/Absensi_Desa", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(data),
-        });
+      
+      // Mengubah objek data {Nama: "Budi",...} menjadi string "Nama=Budi&..."
+      const queryString = new URLSearchParams(data).toString();
+      const webhookUrl = "https.n8n-x5ircifhjkj5.n8x.biz.id/webhook/Absensi_Desa";
 
-        if (response.ok) {
-          statusEl.innerHTML = "✅ Data berhasil dikirim!";
-          statusEl.classList.add("success");
-          tampilkanTombolScanLagi(); // <-- TOMBOL DITAMBAHKAN DI SINI
-        } else {
-          const text = await response.text();
-          statusEl.innerHTML = `❌ Gagal mengirim data ke server.<br><small>${text}</small>`;
+      try {
+          // Mengirim data sebagai GET. 'fetch' secara default menggunakan GET.
+          // Datanya kita tempel di URL menggunakan tanda '?'
+          const response = await fetch(`${webhookUrl}?${queryString}`);
+
+          if (response.ok) {
+              statusEl.innerHTML = "✅ Data berhasil dikirim!";
+              statusEl.classList.add("success");
+              tampilkanTombolScanLagi();
+          } else {
+              const text = await response.text();
+              statusEl.innerHTML = `❌ Gagal mengirim data ke server.<br><small>${text}</small>`;
+              statusEl.classList.add("error");
+              tampilkanTombolUlangi();
+              tampilkanTombolScanLagi();
+          }
+      } catch (err) {
+          statusEl.innerHTML = `❌ Gagal mengirim data: ${err.message}`;
           statusEl.classList.add("error");
           tampilkanTombolUlangi();
-          tampilkanTombolScanLagi(); // <-- TOMBOL DITAMBAHKAN DI SINI
-        }
-      } catch (err) {
-        statusEl.innerHTML = `❌ Gagal mengirim data: ${err.message}`;
-        statusEl.classList.add("error");
-        tampilkanTombolUlangi();
-        tampilkanTombolScanLagi(); // <-- TOMBOL DITAMBAHKAN DI SINI
+          tampilkanTombolScanLagi();
       }
-    }
+  }
 
     function tampilkanTombolUlangi() {
       // Cek agar tidak duplikat
